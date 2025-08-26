@@ -1,71 +1,59 @@
 // index.js
 
-const express = require('express');
-const https = require('https');
-const fs = require('fs');
+export default {
+  async fetch(request, env, ctx) {
+    // --- Log Request Details ---
+    console.log('--- New Webhook Request ---');
+    console.log(`Timestamp: ${new Date().toISOString()}`);
+    console.log(`Method: ${request.method}`);
+    console.log(`URL: ${request.url}`);
 
-const app = express();
-const PORT = 4000;
+    // Log headers by converting them to an object
+    const headers = {};
+    for (const [key, value] of request.headers.entries()) {
+      headers[key] = value;
+    }
+    console.log('Headers:');
+    console.log(JSON.stringify(headers, null, 2));
 
-// --- HTTPS/mTLS Options ---
-const httpsOptions = {
-  // Server key and certificate
-  key: fs.readFileSync('./server-key.pem'),
-  cert: fs.readFileSync('./server-cert.pem'),
+    // --- Inspect the Client Certificate (mTLS) ---
+    // Cloudflare provides mTLS details in the `request.cf.tlsClientAuth` object
+    const clientCert = request.cf.tlsClientAuth;
 
-  // The CA certificate that signed the client certificates
-  ca: fs.readFileSync('./ca-cert.pem'),
+    if (clientCert && clientCert.certVerified) {
+      console.log('Client Certificate Info:');
+      console.log(`- Status: ${clientCert.certVerified}`);
+      console.log(`- Issuer DN: ${clientCert.certIssuerDNLegacy}`);
+      console.log(`- Subject DN: ${clientCert.certSubjectDNLegacy}`);
+      console.log(`- Fingerprint: ${clientCert.certFingerprintSHA256}`);
+      console.log(`- Valid From: ${new Date(clientCert.certNotBefore).toISOString()}`);
+      console.log(`- Valid To: ${new Date(clientCert.certNotAfter).toISOString()}`);
+    } else {
+      console.log('Client Certificate: [None Provided or Invalid]');
+    }
 
-  // Request a certificate from the client
-  requestCert: true,
+    // --- Log the Body ---
+    // Check if the request has a body before trying to read it
+    if (request.method === 'POST' || request.method === 'PUT' || request.method === 'PATCH') {
+      try {
+        const body = await request.json(); // Assumes JSON body
+        console.log('Body:');
+        console.log(JSON.stringify(body, null, 2));
+      } catch (e) {
+        console.log('Body: [Could not parse as JSON]');
+      }
+    } else {
+      console.log('Body: [Empty]');
+    }
 
-  // Reject connections from clients whose certificates are not signed by our CA
-  rejectUnauthorized: true 
+    console.log('---------------------------\n');
+
+    // --- Respond to the Sender ---
+    return new Response(
+      JSON.stringify({ status: 'success', message: 'Webhook received!' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  },
 };
-
-// Middleware to parse JSON and URL-encoded bodies
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// A catch-all route to handle all incoming requests
-app.all('/webhook', (req, res) => {
-  console.log('--- New Webhook Request ---');
-  console.log(`Timestamp: ${new Date().toISOString()}`);
-  console.log(`Method: ${req.method}`);
-  console.log(`Path: ${req.originalUrl}`);
-  console.log('Headers:');
-  console.log(JSON.stringify(req.headers, null, 2));
-
-  // --- Inspect the Client Certificate ---
-  const clientCert = req.socket.getPeerCertificate();
-
-  if (clientCert && Object.keys(clientCert).length > 0) {
-    console.log('Client Certificate Info:');
-    console.log(`- Subject: ${clientCert.subject.CN}`);
-    console.log(`- Issuer: ${clientCert.issuer.CN}`);
-    console.log(`- Valid From: ${clientCert.valid_from}`);
-    console.log(`- Valid To: ${clientCert.valid_to}`);
-    console.log(`- Fingerprint: ${clientCert.fingerprint}`);
-  } else {
-    console.log('Client Certificate: [None Provided or Invalid]');
-  }
-
-  if (Object.keys(req.body).length > 0) {
-    console.log('Body:');
-    console.log(JSON.stringify(req.body, null, 2));
-  } else {
-    console.log('Body: [Empty]');
-  }
-  
-  console.log('---------------------------\n');
-
-  res.status(200).json({ status: 'success', message: 'Webhook received!' });
-});
-
-// Create an HTTPS server instead of an HTTP server
-const server = https.createServer(httpsOptions, app);
-
-// Start the server
-server.listen(PORT, () => {
-  console.log(`🚀 mTLS Webhook listener is running on https://localhost:${PORT}`);
-});

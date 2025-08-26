@@ -1,0 +1,5 @@
+# wrangler.toml
+
+name = "webhook-listener"
+main = "index.js"
+compatibility_date = "2024-04-05"
