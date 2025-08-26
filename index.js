@@ -26,8 +26,6 @@ export default {
       console.log(`- Issuer DN: ${clientCert.certIssuerDNLegacy}`);
       console.log(`- Subject DN: ${clientCert.certSubjectDNLegacy}`);
       console.log(`- Fingerprint: ${clientCert.certFingerprintSHA256}`);
-      console.log(`- Valid From: ${new Date(clientCert.certNotBefore).toISOString()}`);
-      console.log(`- Valid To: ${new Date(clientCert.certNotAfter).toISOString()}`);
     } else {
       console.log('Client Certificate: [None Provided or Invalid]');
     }
